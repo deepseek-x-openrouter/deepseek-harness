@@ -23,6 +23,8 @@ export type PanelActions = BoundActions<ReturnType<typeof createLayoutStore>>
 export interface ILayout {
   /** Toggle the sidebar panel (closed ⟷ contract default width). */
   toggleSidebar(): void
+  /** Toggle the aside panel (collapsed rail ⟷ contract default width). */
+  toggleAside(): void
   /** Open the details panel (no-op when already open). */
   openDetails(): void
   /** Close the details panel. */
@@ -32,6 +34,8 @@ export interface ILayout {
 /** Cross-plugin panel-action face (ctx.layout). */
 export class LayoutController implements ILayout {
   #panels: PanelActions | undefined
+  /** Last observed 'aside' slot occupancy, replayed on (re)attach. */
+  #asideOccupied = false
 
   /**
    * Adopt the root entry's bound store actions. Called from the root
@@ -42,11 +46,28 @@ export class LayoutController implements ILayout {
    */
   attachPanels(actions: PanelActions): void {
     this.#panels = actions
+    actions.setAsideOccupied(this.#asideOccupied)
+  }
+
+  /**
+   * Record whether any plugin occupies the 'aside' slot (assembly wiring from
+   * the plugin body's slot subscription, not a cross-plugin action). Safe
+   * before attach: the value replays when the store actions arrive.
+   * @param occupied - true while the 'aside' slot has at least one entry.
+   */
+  setAsideOccupied(occupied: boolean): void {
+    this.#asideOccupied = occupied
+    this.#panels?.setAsideOccupied(occupied)
   }
 
   /** Toggle the sidebar panel (closed ⟷ contract default width). */
   toggleSidebar(): void {
     this.#require().toggleSidebar()
+  }
+
+  /** Toggle the aside panel (collapsed rail ⟷ contract default width). */
+  toggleAside(): void {
+    this.#require().toggleAside()
   }
 
   /** Open the details panel (no-op when already open). */

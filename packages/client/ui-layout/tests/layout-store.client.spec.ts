@@ -8,18 +8,25 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import {
+  ASIDE_DEFAULT, ASIDE_MAX, ASIDE_MIN,
   DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
+
+/** The untouched-store baseline shape (aside open at default, unoccupied). */
+const INIT = {
+  sidebar: SIDEBAR_DEFAULT, details: 0, aside: ASIDE_DEFAULT,
+  asideOccupied: false, narrow: false, narrowExpanded: false,
+}
 
 const PERSIST_KEY = 'dsh.layout.panels'
 
 beforeEach(() => { localStorage.clear() })
 
 describe('createLayoutStore', () => {
-  it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
+  it('initializes the sidebar at its default width, details closed, aside open-unoccupied, wide viewport assumed', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual(INIT)
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -39,6 +46,23 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().details).toBe(DETAILS_MIN)
     actions.setDetails(9999)
     expect(store.getSnapshot().details).toBe(DETAILS_MAX)
+    actions.setAside(1)
+    expect(store.getSnapshot().aside).toBe(ASIDE_MIN)
+    actions.setAside(9999)
+    expect(store.getSnapshot().aside).toBe(ASIDE_MAX)
+  })
+
+  it('toggleAside flips collapsed <-> contract default, and occupancy is a plain flag', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.setAside(600)
+    actions.toggleAside()
+    expect(store.getSnapshot().aside).toBe(0)
+    actions.toggleAside()
+    expect(store.getSnapshot().aside).toBe(ASIDE_DEFAULT)
+    actions.setAsideOccupied(true)
+    expect(store.getSnapshot().asideOccupied).toBe(true)
+    actions.setAsideOccupied(false)
+    expect(store.getSnapshot().asideOccupied).toBe(false)
   })
 
   it('toggleSidebar flips closed <-> contract default (drag width forgotten)', () => {
@@ -55,7 +79,7 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({ ...INIT, sidebar: 400, narrow: true, narrowExpanded: true })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -93,11 +117,6 @@ describe('createLayoutStore', () => {
     expect(localStorage.getItem(PERSIST_KEY)).toBeNull()
 
     const second = createLayoutStore().create()
-    expect(second.store.getSnapshot()).toEqual({
-      sidebar: SIDEBAR_DEFAULT,
-      details: 0,
-      narrow: false,
-      narrowExpanded: false,
-    })
+    expect(second.store.getSnapshot()).toEqual(INIT)
   })
 })

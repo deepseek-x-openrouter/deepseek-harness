@@ -1,7 +1,7 @@
 /**
  * Layout plugin, browser half: one register() call contributes AppFrame into
  * the runtime's built-in 'root' slot and, in the same breath, declares the
- * four child slots (declaration = exclusive render authority), seats the
+ * five child slots (declaration = exclusive render authority), seats the
  * layout store (panel geometry), and wires the panel-action service face.
  * ctx.layout is the cross-plugin panel-action contract; navigation state lives
  * with the runtime sessions service. A second effect seats the theme
@@ -71,6 +71,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
+     * The rightmost utility column (right of details), a plugin-claimable
+     * mirror of the sidebar: while occupied and a non-blank session is
+     * current, the frame renders it either at its drag-resizable open width
+     * or as a slim collapsed rail — the occupant receives the live column
+     * state and is expected to render the rail UI while collapsed, and
+     * `ctx.layout.toggleAside()` flips the two. Unoccupied, the column is
+     * absent entirely (zero track, no rail).
+     */
+    'aside': { kind: 'single'; scope: 'session'; owner: AsideOwnerProps }
+    /**
      * Frame-wide floating layer, above every column and outside their scroll
      * containers. Deliberately generic and unowned by any feature: a badge, a
      * toast stack or a status pill all belong here, and entries order among
@@ -104,6 +114,14 @@ export interface ConvOwnerProps {}
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
 
+/** Aside owner share: live column state from the frame's concession solve. */
+export interface AsideOwnerProps {
+  /** True when the aside is collapsed (the column renders the compact control rail). */
+  collapsed: boolean
+  /** Rendered column width in px (ASIDE_COLLAPSED when collapsed, 0 when absent). */
+  width: number
+}
+
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']
 
@@ -123,6 +141,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
+        'aside': { kind: 'single', scope: 'session' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per
@@ -135,7 +154,14 @@ export function apply(ctx: ClientContext): void {
         return {}
       },
     }, AppFrame)
+    // Aside occupancy: the frame renders the aside track only while a plugin
+    // occupies the slot, so an assembly without an occupant shows no rail.
+    // The controller buffers the flag until the root entry mounts.
+    const syncAside = () => { layout.setAsideOccupied(ctx.slots.entries('aside').length > 0) }
+    syncAside()
+    const unsubscribeAside = ctx.slots.subscribe('aside', syncAside)
     return () => {
+      unsubscribeAside()
       disposeRegistration()
       // provide()'s disposer settles asynchronously; teardown is synchronous fire-and-forget.
       void disposeService()

@@ -48,6 +48,18 @@
   border-left: none;
 }
 
+.asideCol {
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Like details: the mounted subtree must not paint a seam while the column
+   is absent (no occupant or no session). The collapsed rail keeps its border. */
+.frame[data-aside-absent] .asideCol {
+  border-left: none;
+}
+
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
    centered on the column border via inline left, above column content. Details
    adds a visible 12x32 pill at vertical center; sidebar keeps only the hit strip. */
@@ -75,7 +87,8 @@
   }
 }
 
-.handle[data-side='details']::after {
+.handle[data-side='details']::after,
+.handle[data-side='aside']::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -97,12 +110,17 @@
 
 .detailsCol:hover ~ .handle[data-side='details']::after,
 .handle[data-side='details']:hover::after,
-.handle[data-side='details'][data-dragging='true']::after {
+.handle[data-side='details'][data-dragging='true']::after,
+.asideCol:hover ~ .handle[data-side='aside']::after,
+.handle[data-side='aside']:hover::after,
+.handle[data-side='aside'][data-dragging='true']::after {
   opacity: 1;
 }
 
 .handle[data-side='details']:hover::after,
-.handle[data-side='details'][data-dragging='true']::after {
+.handle[data-side='details'][data-dragging='true']::after,
+.handle[data-side='aside']:hover::after,
+.handle[data-side='aside'][data-dragging='true']::after {
   background: var(--dsw-alias-button-floating-hover);
   border-color: var(--dsw-alias-border-l3);
 }
