@@ -16,6 +16,14 @@
   transition: none;
 }
 
+/* While any handle drags, iframes must not hit-test: an out-of-process frame
+   (e.g. a sandboxed preview) receives raw input at the browser layer, which
+   bypasses the parent document's pointer capture and silently eats the
+   gesture's moves in that direction. */
+.frame[data-dragging] iframe {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .frame {
     transition: none;
