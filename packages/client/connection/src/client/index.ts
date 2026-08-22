@@ -77,6 +77,11 @@ interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: ClientTransportHooks
 }
 
+/** Page global the Host injects when its `trustConfigPlane` opt-in is on. */
+interface ConfigPlaneTrustGlobal {
+  __DSH_CONFIG_PLANE_TRUSTED__?: boolean
+}
+
 /**
  * The ctx.connection service API: the API client plus a one-shot
  * controller starter (the runtime plugin supplies sinks when its object layer
@@ -87,6 +92,14 @@ export interface ConnectionHandle {
   readonly api: IApiClient
   /** Whether the current page authority is loopback; non-browser contexts default to true. */
   readonly isLoopback: boolean
+  /**
+   * Whether this page may use the Host configuration plane (settings and
+   * credential RPCs): loopback pages always may; a remote page may only when
+   * the deployment opted in (`trustConfigPlane`), advertised through the
+   * `__DSH_CONFIG_PLANE_TRUSTED__` page global. Optional so hand-built test
+   * handles predate the field; absent means fall back to {@link isLoopback}.
+   */
+  readonly configPlaneTrusted?: boolean
   /** Generation-scoped Host facts, including the account home and native path-open capability. */
   readonly hostDescription: HostDescriptionSource
   /** Generic logical RPC channels over the same Connection transport. */
@@ -127,9 +140,12 @@ export function apply(ctx: Context): void {
       }
     }
   }
+  const isLoopback = pageLocation === undefined || isLoopbackHostname(pageLocation.hostname)
   const handle: ConnectionHandle = {
     api,
-    isLoopback: pageLocation === undefined || isLoopbackHostname(pageLocation.hostname),
+    isLoopback,
+    configPlaneTrusted: isLoopback
+      || (globalThis as ConfigPlaneTrustGlobal).__DSH_CONFIG_PLANE_TRUSTED__ === true,
     hostDescription: {
       getSnapshot: () => description,
       subscribe: (listener) => {

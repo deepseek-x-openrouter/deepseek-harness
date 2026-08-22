@@ -163,12 +163,15 @@
     # webserver under /api; browser half is the fetch/SSE client.
     - id: connection
       name: '@deepseek-ai/dsh-client-connection'
-      inject: [webRuntime]
+      inject: [webRuntime, webStartup]
       config:
         # LAN literals derived from the active bind plus --trusted-host extras.
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        # --trust-remote-config: serve the configuration plane to those
+        # authorities (opt-in for authenticated reverse-proxy deployments).
+        trustConfigPlane: !!js ctx.webStartup.trustRemoteConfig
 
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'

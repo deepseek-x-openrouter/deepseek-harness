@@ -57,12 +57,22 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Serve the configuration plane (settings, credentials, and the other
+   * privileged methods) to `trustedHosts` authorities instead of pinning it to
+   * loopback, and advertise that trust to the served page so remote browsers
+   * persist settings. Opt-in for deployments whose external reverse proxy
+   * already authenticates every request; anyone who reaches the harness can
+   * then read and write its configuration and secrets.
+   */
+  trustConfigPlane?: boolean
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
 }
 
 export const Config: z<ConnectionConfig> = z.object({
   trustedHosts: z.array(String).default([]),
+  trustConfigPlane: z.boolean().default(false),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
 })
 
@@ -130,6 +140,9 @@ const PRIVILEGED_METHODS = new Set([
 export function apply(ctx: Context, config?: ConnectionConfig): void {
   // The Loader resolves schema defaults; hand-built test contexts may pass none.
   const trustedHosts = config?.trustedHosts ?? []
+  // Empty keeps the privileged set loopback-pinned; the opt-in widens it to
+  // the same authorities the prefix-wide fence accepts.
+  const privilegedTrustedHosts = config?.trustConfigPlane === true ? trustedHosts : []
   const maxRequestBodyBytes = config?.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES
   // Config boundary: a malformed entry fails the load loudly here rather than
   // silently authorizing its hostname prefix at request time.
@@ -144,7 +157,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         : undefined
       if (method !== undefined
         && PRIVILEGED_METHODS.has(method)
-        && !isTrustedApiRequest(request, [])) {
+        && !isTrustedApiRequest(request, privilegedTrustedHosts)) {
         return new Response('forbidden', { status: 403 })
       }
       if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
@@ -171,6 +184,14 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
     },
   }
   ctx.effect(() => ctx.webServer.register(route), 'client-connection: /api route')
+  if (config?.trustConfigPlane === true) {
+    // The browser half reads this page global to keep settings scopes in
+    // 'host' persistence off-loopback; without it a remote page treats the
+    // configuration plane as unavailable and never issues the now-served RPCs.
+    ctx.on('webserver/index-inject', (table) => {
+      table.push({ kind: 'global', name: '__DSH_CONFIG_PLANE_TRUSTED__', value: true })
+    })
+  }
   ctx.inject(['apiProxy'], (apiCtx) => {
     assertImageBodyCapacity(apiCtx, maxRequestBodyBytes)
     const downlinks = new WebSocketDownlinks(apiCtx.apiProxy)
