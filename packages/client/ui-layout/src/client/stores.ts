@@ -9,7 +9,7 @@
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-runtime/client'
 import {
-  ASIDE_DEFAULT, ASIDE_MAX, ASIDE_MIN,
+  ASIDE_DEFAULT, ASIDE_MIN,
   clampWidth, DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from './columns.ts'
@@ -68,7 +68,9 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
-      setAside: (d, px: number) => { d.aside = clampWidth(px, ASIDE_MIN, ASIDE_MAX) },
+      // Floor only — no ceiling: the user may drag the aside as wide as the
+      // frame allows (the solver trims to what physically fits per frame).
+      setAside: (d, px: number) => { d.aside = Math.max(ASIDE_MIN, Math.round(px)) },
       // Narrow toggles flip only the override: the width preference survives
       // untouched, so re-widening restores the pre-squeeze layout.
       toggleSidebar: (d) => {

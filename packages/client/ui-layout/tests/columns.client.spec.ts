@@ -102,39 +102,46 @@ describe('computeColumns — aside column', () => {
     })
   })
 
-  it('an open-aside preference clamps into its contract range', () => {
-    expect(computeColumns(2400, open(SIDEBAR_DEFAULT), closed(0), 9999).aside).toBe(760)
+  it('an open-aside preference has a floor but no ceiling', () => {
+    // 280 + 1200 + 640 = 2120 <= 2400: a wide drag is honored verbatim.
+    expect(computeColumns(2400, open(SIDEBAR_DEFAULT), closed(0), 1200).aside).toBe(1200)
     expect(computeColumns(2400, open(SIDEBAR_DEFAULT), closed(0), ASIDE_COLLAPSED + 1).aside).toBe(ASIDE_MIN)
   })
 
-  it('details concedes and closes before an open aside shrinks', () => {
+  it('details concedes and closes before the aside gives anything', () => {
     // 280 + 360 + 420 + 640 = 1700; at 1500 details shrinks to 1500-280-420-640 = 160 → below its
     // min, so details closes and the aside holds: center = 1500-280-420 = 800.
     const cols = computeColumns(1500, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), ASIDE_DEFAULT)
     expect(cols).toEqual({ sidebar: 280, center: 800, details: 0, aside: ASIDE_DEFAULT })
   })
 
-  it('after details closes the aside shrinks toward its minimum', () => {
-    // 280 + 640 = 920; at 1300 the aside concedes to 1300-280-640 = 380.
+  it('after details closes the aside holds its width; center absorbs below its min', () => {
+    // 1300 - 280 - 420 = 600 < CENTER_MIN — the dragged aside width wins.
     const cols = computeColumns(1300, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), ASIDE_DEFAULT)
-    expect(cols).toEqual({ sidebar: 280, center: CENTER_MIN, details: 0, aside: 380 })
+    expect(cols).toEqual({ sidebar: 280, center: 600, details: 0, aside: ASIDE_DEFAULT })
   })
 
-  it('a starved open aside falls to its rail, never to zero', () => {
-    // 280 + 300 + 640 = 1220 > 1100 → aside at rail; center absorbs.
-    const cols = computeColumns(1100, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), ASIDE_DEFAULT)
-    expect(cols).toEqual({
-      sidebar: 280, center: 1100 - 280 - ASIDE_COLLAPSED, details: 0, aside: ASIDE_COLLAPSED,
-    })
+  it('center absorbs all the way to zero before the aside trims', () => {
+    // 650 - 280 = 370 < 420: the preference exceeds the non-sidebar span, so
+    // the aside fills exactly what remains and center reaches zero.
+    const cols = computeColumns(650, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), ASIDE_DEFAULT)
+    expect(cols).toEqual({ sidebar: 280, center: 0, details: 0, aside: 370 })
+  })
+
+  it('a trimmed open aside never resolves below its rail', () => {
+    expect(computeColumns(310, open(SIDEBAR_DEFAULT), closed(0), ASIDE_DEFAULT))
+      .toEqual({ sidebar: 280, center: 0, details: 0, aside: ASIDE_COLLAPSED })
   })
 
   it('an absent aside (0) never materializes a rail', () => {
-    const cols = computeColumns(700, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), 0)
-    expect(cols.aside).toBe(0)
+    expect(computeColumns(700, open(SIDEBAR_DEFAULT), open(DETAILS_DEFAULT), 0).aside).toBe(0)
+    // Even in the deepest degenerate branch (viewport under the sidebar).
+    expect(computeColumns(200, open(SIDEBAR_DEFAULT), closed(0), 0))
+      .toEqual({ sidebar: 280, center: 0, details: 0, aside: 0 })
   })
 
   it('recovery is pure: re-widening restores the aside preference', () => {
-    expect(computeColumns(1100, open(SIDEBAR_DEFAULT), closed(0), ASIDE_DEFAULT).aside).toBe(ASIDE_COLLAPSED)
+    expect(computeColumns(650, open(SIDEBAR_DEFAULT), closed(0), ASIDE_DEFAULT).aside).toBe(370)
     expect(computeColumns(1920, open(SIDEBAR_DEFAULT), closed(0), ASIDE_DEFAULT).aside).toBe(ASIDE_DEFAULT)
   })
 })

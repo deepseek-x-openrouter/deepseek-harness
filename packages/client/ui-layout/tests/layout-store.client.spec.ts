@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createLayoutStore } from '@deepseek-ai/dsh-client-ui-layout/src/client/stores.ts'
 import {
-  ASIDE_DEFAULT, ASIDE_MAX, ASIDE_MIN,
+  ASIDE_DEFAULT, ASIDE_MIN,
   DETAILS_DEFAULT, DETAILS_MAX, DETAILS_MIN,
   SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from '@deepseek-ai/dsh-client-ui-layout/src/client/columns.ts'
@@ -48,8 +48,9 @@ describe('createLayoutStore', () => {
     expect(store.getSnapshot().details).toBe(DETAILS_MAX)
     actions.setAside(1)
     expect(store.getSnapshot().aside).toBe(ASIDE_MIN)
+    // No ceiling: a very wide drag is stored verbatim (the solver trims per frame).
     actions.setAside(9999)
-    expect(store.getSnapshot().aside).toBe(ASIDE_MAX)
+    expect(store.getSnapshot().aside).toBe(9999)
   })
 
   it('toggleAside flips collapsed <-> contract default, and occupancy is a plain flag', () => {
