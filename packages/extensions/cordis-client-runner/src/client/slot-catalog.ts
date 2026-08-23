@@ -80,6 +80,35 @@ export const CLIENT_NOTES: readonly string[] = [
 // detection is told to skip the data rather than the file.
 export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
   {
+    key: 'aside',
+    kind: 'single',
+    scope: 'session',
+    summary: 'The rightmost utility column (right of details), a plugin-claimable mirror of the sidebar: while occupied and a non-blank session is current, the frame renders it either at its drag-resizable open width or as a slim collapsed rail — the occupant receives the live column state and is expected to render the rail UI while collapsed, and `ctx.layout.toggleAside()` flips the two.',
+    doc: 'The rightmost utility column (right of details), a plugin-claimable\nmirror of the sidebar: while occupied and a non-blank session is\ncurrent, the frame renders it either at its drag-resizable open width\nor as a slim collapsed rail — the occupant receives the live column\nstate and is expected to render the rail UI while collapsed, and\n`ctx.layout.toggleAside()` flips the two. Unoccupied, the column is\nabsent entirely (zero track, no rail).',
+    registerOptions: [],
+    ownerProps: [
+      '/** Aside owner share: live column state from the frame\'s concession solve. */\nexport interface AsideOwnerProps {\n  /** True when the aside is collapsed (the column renders the compact control rail). */\n  collapsed: boolean\n  /** Rendered column width in px (ASIDE_COLLAPSED when collapsed, 0 when absent). */\n  width: number\n}',
+    ],
+    ownerPropsReferences: [],
+    standardProps: [
+      'useSessions: SnapshotSelectorHook<SessionListState>',
+      'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
+      'useSession: SnapshotSelectorHook<ConversationSnapshot>',
+      'sessionId: SessionId',
+      'useProjection: UseProjection',
+      'useInput: SnapshotSelectorHook<InputState>',
+      'inputActions: InputActions',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
+    occupants: [],
+    replaceRisk: 'none',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'aside\', () => ctx.slots.register(\n      { name: \'aside\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-layout/src/client/index.ts:82',
+  },
+  {
     key: 'conversation',
     kind: 'single',
     scope: 'session-maybe',
@@ -1385,7 +1414,6 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'sidebar.settings\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-settings-models WelcomeNotice id \'welcome-notice\'',
       'client-ui-settings-models DeepSeekOnboardingDialog id \'deepseek-official\'',
     ],
     replaceRisk: 'none',
@@ -1586,7 +1614,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.overlay\', () => ctx.slots.register(\n      { name: \'shell.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-layout/src/client/index.ts:83',
+    source: 'packages/client/ui-layout/src/client/index.ts:93',
   },
   {
     key: 'sidebar',

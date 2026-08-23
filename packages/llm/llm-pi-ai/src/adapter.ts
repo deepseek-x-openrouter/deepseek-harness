@@ -35,6 +35,7 @@ import type {
   Models,
   ModelThinkingLevel,
   MutableModels,
+  ProviderResponse,
   SimpleStreamOptions,
   ThinkingLevel,
 } from '@earendil-works/pi-ai'
@@ -98,6 +99,27 @@ export interface PiAiAdapterOptions {
    * conversion because its stored replay state is unusable by this build.
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+  /**
+   * Observe the status and headers of one provider HTTP response, before its
+   * body is read and whether or not the status is a success.
+   *
+   * The metadata a provider puts beside the body is provider-specific — quota
+   * windows, deprecation notices, request ids — so it is reported verbatim
+   * rather than interpreted here: this adapter serves every pi-ai route and
+   * has no vocabulary for any one provider's headers.
+   *
+   * Only the SSE transport reports: pi-ai's WebSocket path has no HTTP
+   * response to observe. Which responses reach here is the pi-ai API's
+   * decision — the Codex path reports before inspecting the status, the
+   * OpenAI-completions path only once the SDK call resolved — so a failed
+   * status may never be observed.
+   */
+  onProviderResponse?: (detail: {
+    provider: string
+    model: string
+    status: number
+    headers: Readonly<Record<string, string>>
+  }) => void
 }
 
 /** The two auth injectables a pi-ai collection is built with. */
@@ -373,6 +395,16 @@ export class PiAiAdapter extends LlmAdapter {
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
+        ...this.config.onProviderResponse === undefined ? {} : {
+          onResponse: (response: ProviderResponse): void => {
+            this.config.onProviderResponse?.({
+              provider: options.provider,
+              model: options.model,
+              status: response.status,
+              headers: response.headers,
+            })
+          },
+        },
       })
       const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
       let exhausted = false

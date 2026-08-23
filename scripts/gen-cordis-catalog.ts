@@ -183,6 +183,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'fs': 'filesystem.md',
   'goal': 'goal.md',
   'llm': 'llm-streaming.md',
+  'llm-pi-ai': 'llm-streaming.md',
   'session': 'session.md',
   'settings': 'settings.md',
   'skills': 'skills.md',

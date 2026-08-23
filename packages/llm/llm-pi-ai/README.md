@@ -163,6 +163,14 @@ Durable content is the authoritative record; replay state only restores native f
 
 Every request carries the shared attribution header from dsh-llm's `attributionHeaders()`, merged through pi-ai's `headers` stream option. Provider-specific app-attribution headers are not synthesized. See [dsh-llm § App attribution](../llm/README.md#app-attribution-attributionts).
 
+## Provider response metadata
+
+`llm-pi-ai/provider-response` reports one provider HTTP response — `{provider, model, status, headers}` — before its body is read. Headers are verbatim: what a provider puts beside the body is its own vocabulary (quota windows, deprecation notices, request ids), and this plugin serves every pi-ai route, so a listener that understands a route interprets that route's headers itself.
+
+It fires only on the SSE transport (the WebSocket path has no HTTP response) and only for responses the pi-ai API surfaces: the Codex path reports before inspecting the status, while the OpenAI-completions path reports once the SDK call resolved, so a failed status may never arrive. Read an absent event as no information, never as success. A listener that throws is logged and contained — pi-ai awaits the notification inside the request, so an observer must not be able to fail the generation it is watching.
+
+The event carries no model-visible content and is not recorded as a session event; nothing about it reaches a request.
+
 ## Dependency weight
 
 pi-ai installs several provider SDKs and lazy-loads the one selected by the catalog model. The dependency weight is isolated to this opt-in adapter package.
@@ -211,5 +219,5 @@ Recorded response content appends to the next request and does not invalidate it
 - **An unauthenticated route depends on its protocol** — naming no credential resolves the route as configured-but-keyless, but pi-ai's OpenAI-compatible implementation still requires an API key or an `Authorization` header, so a keyless local server needs a placeholder credential referenced by `apiKeyEnv` or an `Authorization` entry in `headers`.
 - **`GenerateOptions.stop` is unsupported** — pi-ai's common stream options cannot guarantee stop-sequence behavior across providers, so the adapter rejects the field.
 - **In-history `system` messages use pi-ai's common context conversion** — provider-specific placement follows pi-ai rather than a harness-owned wire override.
-- **Provider HTTP status is unavailable** — pi-ai error events do not expose a stable HTTP status across providers; failures expose only stable harness error codes.
+- **Provider HTTP status does not reach the stream** — pi-ai error events expose no stable HTTP status across providers, so a `finish {kind:'error'}` carries only stable harness error codes. `llm-pi-ai/provider-response` observes the status out of band, but not every failure produces one and an observer cannot change a request's outcome, so it informs a readout rather than error handling.
 - **Retry policy is provider-owned, not an SDK retry** — each provider profile may supply nested `retryPolicy`; omission resolves to normal mode with five retries, and the effective route policy is what `dsh-llm-retry` executes at the agent failed-step extension point. pi-ai SDK retries stay disabled so durable agent steps and `llm/retry` events own every visible attempt, and direct `ctx.llm.stream()` calls remain single-attempt.

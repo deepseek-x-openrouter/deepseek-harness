@@ -415,6 +415,15 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Serve the configuration plane (settings, credentials, and the other
+   * privileged methods) to `trustedHosts` authorities instead of pinning it to
+   * loopback, and advertise that trust to the served page so remote browsers
+   * persist settings. Opt-in for deployments whose external reverse proxy
+   * already authenticates every request; anyone who reaches the harness can
+   * then read and write its configuration and secrets.
+   */
+  trustConfigPlane?: boolean
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
 }

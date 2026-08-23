@@ -941,4 +941,49 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 ```
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
+
+<a id="llm-pi-ai-events"></a>
+
+### `llm-pi-ai/*` events
+
+<a id="llm-pi-aiprovider-response--emit"></a>
+
+#### `llm-pi-ai/provider-response` — emit
+
+One provider HTTP response arrived, reported by status and headers before its body is read.
+
+Fires only on the SSE transport — the WebSocket path has no HTTP response to report — and only for responses the pi-ai API surfaces: the Codex path reports before it inspects the status, while the OpenAI-completions path reports only once the SDK call resolved, so a failed status may never arrive. A listener reads an absent event as no information, never as success.
+
+The headers are verbatim: what a provider puts beside the body is its own vocabulary — quota windows, deprecation notices, request ids — and this plugin serves every pi-ai route, so naming any one provider's fields here would put that provider's format in a generic bridge. Listeners that understand a route interpret its headers themselves.
+
+A listener that throws is logged and contained: pi-ai awaits this notification inside the request, so an observer must not be able to fail the generation it is only watching.
+
+```ts cordis-catalog
+/**
+ * One provider HTTP response arrived, reported by status and headers
+ * before its body is read.
+ *
+ * Fires only on the SSE transport — the WebSocket path has no HTTP
+ * response to report — and only for responses the pi-ai API surfaces:
+ * the Codex path reports before it inspects the status, while the
+ * OpenAI-completions path reports only once the SDK call resolved, so a
+ * failed status may never arrive. A listener reads an absent event as no
+ * information, never as success.
+ *
+ * The headers are verbatim: what a provider puts beside the body is its
+ * own vocabulary — quota windows, deprecation notices, request ids — and
+ * this plugin serves every pi-ai route, so naming any one provider's
+ * fields here would put that provider's format in a generic bridge.
+ * Listeners that understand a route interpret its headers themselves.
+ *
+ * A listener that throws is logged and contained: pi-ai awaits this
+ * notification inside the request, so an observer must not be able to
+ * fail the generation it is only watching.
+ * @param detail - the route, the model, the status, and the response headers.
+ * @mode emit
+ */
+'llm-pi-ai/provider-response'(detail: { provider: string model: string status: number headers: Readonly<Record<string, string>> }): void
+```
+
+Source: [`packages/llm/llm-pi-ai/src/index.ts`](../../packages/llm/llm-pi-ai/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -312,6 +312,37 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/v1/responses'])
   })
 
+  it('reports provider response status and headers verbatim', async () => {
+    const server = await mockServer([{ events: textEvents, headers: { 'x-quota-used-percent': '12' } }])
+    const ctx = await harness(server.url)
+    const seen: { provider: string; model: string; status: number; headers: Readonly<Record<string, string>> }[] = []
+    ctx.on('llm-pi-ai/provider-response', (detail) => { seen.push(detail) })
+
+    await assemble(ctx, {
+      model: 'deepseek-v4-flash',
+      messages: [createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'plugin', plugin: 'test' } })],
+    })
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.provider).toBe('deepseek')
+    expect(seen[0]?.model).toBe('deepseek-v4-flash')
+    expect(seen[0]?.status).toBe(200)
+    expect(seen[0]?.headers['x-quota-used-percent']).toBe('12')
+  })
+
+  it('does not fail the request when a response listener throws', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url)
+    ctx.on('llm-pi-ai/provider-response', () => { throw new Error('observer failure') })
+
+    const result = await assemble(ctx, {
+      model: 'deepseek-v4-flash',
+      messages: [createUserMessage({ content: [{ type: 'text', text: 'hi' }], source: { kind: 'plugin', plugin: 'test' } })],
+    })
+
+    expect(result.finish.kind).toBe('stop')
+  })
+
   it('forces one wire request for an SDK-retryable provider failure', async () => {
     const server = await mockServer([
       {

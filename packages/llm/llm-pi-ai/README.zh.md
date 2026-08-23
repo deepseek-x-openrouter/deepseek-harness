@@ -164,6 +164,14 @@ pi-ai 依据提供方 id 与 baseURL 决定每个请求的形状：系统提示�
 
 每个请求都携带 dsh-llm `attributionHeaders()` 的共享归因标头，并通过 pi-ai `headers` 流选项合并。不会合成提供方特定应用归因标头。详见 [dsh-llm § 应用归因](../llm/README.zh.md#app-attribution-attributionts)。
 
+## 提供方响应元数据
+
+`llm-pi-ai/provider-response` 报告一次提供方 HTTP 响应 —— `{provider, model, status, headers}` —— 时机在读取其响应体之前。header 原样传递：提供方放在响应体旁边的内容属于它自己的词汇（配额窗口、弃用通知、请求 id），而本插件服务于每一条 pi-ai 路由，因此由理解某条路由的监听方自行解读该路由的 header。
+
+该事件仅在 SSE 传输上触发（WebSocket 路径没有 HTTP 响应），且仅针对 pi-ai API 会公开的响应：Codex 路径在检查状态之前就上报，而 OpenAI-completions 路径只在 SDK 调用完成后才上报，因此失败状态可能永远不会到达。事件缺席应读作没有信息，绝不能读作成功。监听方抛出的异常会被记录并被隔离 —— pi-ai 在请求内部 await 该通知，因此观察方不得让它只是在旁观的那次生成失败。
+
+该事件不携带任何模型可见内容，也不会记录为 session 事件；它的任何部分都不会进入请求。
+
 ## 依赖体量
 
 pi-ai 会安装多个提供方 SDK，并延迟加载 catalog 模型所选的 SDK。该可选适配器包将依赖体量隔离在自身范围内。
@@ -212,5 +220,5 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 - **未认证路由取决于其协议**：不点名凭据会让路由解析为「已配置但无密钥」，但 pi-ai 的 OpenAI 兼容实现仍要求 API key 或 `Authorization` 标头，因此无鉴权的本地服务需要一个由 `apiKeyEnv` 引用的占位凭据，或在 `headers` 中给出 `Authorization` 条目。
 - **不支持 `GenerateOptions.stop`**：pi-ai 的通用流选项无法保证所有提供方都支持 stop sequence，因此适配器会拒绝该字段。
 - **历史中的 `system` 消息使用 pi-ai 通用上下文转换**：提供方特定位置由 pi-ai 决定，而非由 harness 拥有的协议覆盖决定。
-- **无法获取提供方 HTTP 状态**：pi-ai 错误事件不会在所有提供方上公开稳定 HTTP 状态；失败只公开稳定 harness 错误 code。
+- **提供方 HTTP 状态不会进入流**：pi-ai 错误事件不会在所有提供方上公开稳定 HTTP 状态，因此 `finish {kind:'error'}` 只携带稳定的 harness 错误 code。`llm-pi-ai/provider-response` 会在带外观察到状态，但并非每次失败都会产生一次，且观察方无法改变一次请求的结果，因此它服务于读数展示，而不是错误处理。
 - **重试策略由提供方持有，而不是 SDK 重试**：每个提供方 profile 都可以提供嵌套的 `retryPolicy`；省略时解析为 normal 模式并重试五次，`dsh-llm-retry` 会在 agent 的失败步骤扩展点上执行有效路由策略。pi-ai SDK 重试仍保持禁用，因此持久化的 agent 步骤与 `llm/retry` 事件记录每次可见尝试，直接 `ctx.llm.stream()` 调用仍只尝试一次。
