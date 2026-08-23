@@ -1,9 +1,9 @@
 /**
  * ModelSelect: the composer's named model seat (`conversation.input.model`).
- * Two-level selection per figma 496:26454's MenuDropdown: the root menu is
- * the Model / Effort row pair (label + current value + a right chevron),
- * each drilling into its own list — the provider-grouped model list over
- * the shared directory, and the effort levels. The trigger (313:14108's
+ * Provider-first selection: the root menu exposes the provider and effort
+ * rows, provider selection opens a provider list, and choosing a provider opens
+ * only that provider's models. This keeps the shared directory's full catalog
+ * out of the first model-selection view. The trigger (313:14108's
  * ToggleButton) shows both: model name + effort in the caption tone.
  * Data and submission ride the SAME per-session ModelDirectory as the
  * /model popup; exact-model reasoning metadata and the selected effort come
@@ -26,7 +26,7 @@ import type { ModelSelectInjected } from './slots.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
-type Pane = 'root' | 'model' | 'effort'
+type Pane = 'root' | 'provider' | 'model' | 'effort'
 
 /** One dynamic effort row; undefined means preserve the provider default. */
 interface EffortChoice {
@@ -52,6 +52,7 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  const [provider, setProvider] = useState<string | undefined>(undefined)
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -80,6 +81,19 @@ export function ModelSelect(
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
   const currentChoice = choices[selectedIndex]
+  const currentGroup = state.groups.find(group => group.id === state.current?.provider)
+  const selectedGroup = state.groups.find(group => group.id === provider)
+  const providerGroups = useMemo(() => {
+    const priority = (group: typeof state.groups[number]): number => {
+      const id = group.id.toLowerCase()
+      const name = group.name.toLowerCase()
+      if (id.includes('openrouter') || name.includes('openrouter')) return 0
+      if (id.includes('deepseek') || name.includes('deepseek')) return 1
+      if (id.includes('codex') || name.includes('codex')) return 2
+      return 3
+    }
+    return [...state.groups].sort((a, b) => priority(a) - priority(b) || a.name.localeCompare(b.name))
+  }, [state.groups])
   const reasoning = currentChoice?.model.reasoning
   const effectiveEffort = state.current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortLabel = reasoning === undefined
@@ -128,6 +142,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    setProvider(state.current?.provider)
     setOpen(true)
     reload()
   }
@@ -251,9 +266,9 @@ export function ModelSelect(
         >
           {pane === 'root' && (
             <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('model') }}>
-                <span className={css.cellLabel}>{t('menu.model')}</span>
-                <span className={css.cellValue}>{modelLabel}</span>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('provider') }}>
+                <span className={css.cellLabel}>{t('menu.provider')}</span>
+                <span className={css.cellValue}>{currentGroup?.name ?? t('empty.providers')}</span>
                 <IconChevronRightOutline14 className={css.cellChevron} />
               </button>
               {reasoning !== undefined && (
@@ -266,8 +281,41 @@ export function ModelSelect(
             </>
           )}
 
+          {pane === 'provider' && (
+            <>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.back} onClick={() => { setPane('root') }}>
+                ← {t('menu.back')}
+              </button>
+              {state.status === 'loading' && <div className={css.status}>{t('status.loading')}</div>}
+              {state.error !== null && lastActionRef.current === 'load' && (
+                <div className={css.error}>
+                  <span>{t('error.action', { message: state.error })}</span>
+                  <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
+                </div>
+              )}
+              {providerGroups.map(group => (
+                <button
+                  ref={itemRef()}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={provider === group.id}
+                  className={clsx(css.option, provider === group.id && css.selected)}
+                  key={group.id}
+                  onClick={() => { setProvider(group.id); setPane('model') }}
+                >
+                  <span className={css.optionCopy}><span className={css.modelName}>{group.name}</span></span>
+                  <span className={css.check}>{provider === group.id ? <IconCheckOutline16 /> : null}</span>
+                </button>
+              ))}
+              {state.status === 'ready' && providerGroups.length === 0 && <div className={css.empty}>{t('empty.providers')}</div>}
+            </>
+          )}
+
           {pane === 'model' && (
             <>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.back} onClick={() => { setPane('provider') }}>
+                ← {t('menu.back')}
+              </button>
               {state.status === 'loading' && (
                 <div className={css.status}>{t('status.loading')}</div>
               )}
@@ -284,42 +332,30 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
-                  const headingId = `${id}-${group.id}`
+                {selectedGroup?.models.map((model) => {
+                  const selected = state.current?.provider === selectedGroup.id && state.current.model === model.id
                   return (
-                    <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            className={clsx(css.option, selected && css.selected)}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                              {model.description !== undefined && (
-                                <span className={css.description}>{model.description}</span>
-                              )}
-                            </span>
-                            <span className={css.check}>
-                              {selected ? <IconCheckOutline16 /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </section>
+                    <button
+                      ref={itemRef()}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selected}
+                      className={clsx(css.option, selected && css.selected)}
+                      key={model.id}
+                      title={model.name}
+                      disabled={busy}
+                      onClick={() => { choose({ provider: selectedGroup.id, model: model.id }) }}
+                    >
+                      <span className={css.optionCopy}>
+                        <span className={css.modelName}>{model.name}</span>
+                        {model.description !== undefined && <span className={css.description}>{model.description}</span>}
+                      </span>
+                      <span className={css.check}>{selected ? <IconCheckOutline16 /> : null}</span>
+                    </button>
                   )
                 })}
               </div>
-              {state.status === 'ready' && choices.length === 0 && (
+              {state.status === 'ready' && (selectedGroup?.models.length ?? 0) === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
               )}
             </>

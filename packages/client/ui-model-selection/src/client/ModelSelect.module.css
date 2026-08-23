@@ -249,6 +249,26 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.back {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.back:hover,
+.back:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
 .cellLabel {
   flex: 0 0 auto;
   white-space: nowrap;
