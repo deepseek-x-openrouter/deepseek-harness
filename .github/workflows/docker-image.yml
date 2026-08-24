@@ -6,6 +6,11 @@ on:
   push:
     branches: [develop]
     tags: ['v*']
+    # Prose never changes the image; only a source or packaging change does.
+    paths-ignore:
+      - '**/*.md'
+      - docs/**
+      - website/**
   workflow_dispatch:
     inputs:
       platforms:
