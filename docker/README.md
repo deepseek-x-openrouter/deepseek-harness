@@ -95,10 +95,13 @@ Packages registry (`.github/workflows/docker-image.yml`), so another stack
 pulls it instead of building it:
 
 ```
-ghcr.io/deepseek-x-openrouter/deepseek-harness:latest   # develop
-ghcr.io/deepseek-x-openrouter/deepseek-harness:sha-1a2b3c4
-ghcr.io/deepseek-x-openrouter/deepseek-harness:0.1.1    # on a v* tag
+ghcr.io/deepseek-x-openrouter/deepseek-harness:latest     # the develop branch
+ghcr.io/deepseek-x-openrouter/deepseek-harness:develop
+ghcr.io/deepseek-x-openrouter/deepseek-harness:sha-5b5e2de  # one exact commit
+ghcr.io/deepseek-x-openrouter/deepseek-harness:0.1.1      # on a v* tag
 ```
+
+Pin a `sha-` tag in anything you would rather not have move under you.
 
 The package inherits the repository's visibility. While the repository is
 private, hosts pulling it need a login first — a classic personal access token
