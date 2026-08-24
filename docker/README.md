@@ -80,6 +80,31 @@ container before publishing it beyond `127.0.0.1` (set `BIND_ADDR`, and name
 the public authority in `PUBLIC_HOST` so the harness accepts pages served under
 it).
 
+## Who it runs as
+
+The container runs as its own unprivileged account, `dsh`, uid **10001** — not
+the base image's uid 1000, which on most hosts is a real person whose files,
+sockets, and bind mounts would otherwise be within the agent's reach. The
+installation under `/opt/dsh` stays root-owned, so the agent cannot rewrite the
+harness it is running in, and nothing in the container is ever root.
+
+That uid has to be able to write the two volumes:
+
+- The **home volume** is created with the right ownership on first use. A
+  volume left over from an image that ran as another user is not, and the
+  container says so on start with the one command that fixes it.
+- A **bind-mounted workspace** belongs to whoever owns it on the host. Either
+  give it to 10001 (`sudo chown -R 10001:10001 <dir>`), or build the image
+  under your own ids instead:
+
+  ```sh
+  UID=$(id -u) GID=$(id -g) docker compose up -d --build
+  ```
+
+  The second choice trades the separation back: the container then runs with
+  exactly the reach of that account. It is the right one for a laptop working
+  on your own files, the wrong one on a shared host.
+
 ## Where the state lives
 
 | Path | Volume | Holds |

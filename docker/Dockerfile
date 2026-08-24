@@ -8,6 +8,10 @@
 # or let docker/docker-compose.yml do it.
 
 FROM caddy:2-alpine AS caddy
+# Copied rather than referenced in place so the published binary's
+# cap_net_bind_service is left behind: nothing here binds a privileged port,
+# and the capability would survive into a container that drops the rest.
+RUN cp /usr/bin/caddy /caddy
 
 FROM node:24-bookworm-slim AS build
 
@@ -42,13 +46,22 @@ ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 # `dsh plugin` shells out to pnpm; a user adding a plugin by hand needs it.
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
-COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+COPY --from=caddy /caddy /usr/bin/caddy
 COPY --from=build /opt/dsh /opt/dsh
 COPY docker/Caddyfile /etc/caddy/Caddyfile
 
-RUN chmod +x /opt/dsh/docker/entrypoint.sh \
+# The container's own account, deliberately not the base image's `node` (uid
+# 1000): on most hosts uid 1000 is a real person, and a bind mount or a socket
+# they own would be the agent's to write. 10001 belongs to nobody.
+# Build with --build-arg UID=$(id -u) to match a bind-mounted workspace's owner
+# instead, accepting that the container then runs with that account's reach.
+ARG UID=10001
+ARG GID=10001
+RUN groupadd --gid "$GID" dsh \
+    && useradd --uid "$UID" --gid "$GID" --create-home --home-dir /home/dsh --shell /bin/bash dsh \
+    && chmod +x /opt/dsh/docker/entrypoint.sh \
     && mkdir -p /data /workspace \
-    && chown -R node:node /data /workspace
+    && chown -R dsh:dsh /data /workspace /home/dsh
 
 # Signing in happens in here, never through the environment: `dsh-login` runs
 # the pi-ai provider's own OAuth flow (ChatGPT's device code needs no callback
@@ -66,7 +79,7 @@ ENV DSH_HOME=/data \
     WEB_PORT=8080 \
     HARNESS_PORT=3080
 
-USER node
+USER dsh
 WORKDIR /workspace
 EXPOSE 8080
 VOLUME ["/data", "/workspace"]

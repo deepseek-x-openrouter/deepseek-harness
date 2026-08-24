@@ -19,7 +19,7 @@
  */
 
 import { createRequire } from 'node:module'
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 // The installation is the only place a YAML parser is guaranteed to be, and
@@ -32,6 +32,7 @@ const HOME = process.env.DSH_HOME ?? '/data'
 const PROFILE = process.env.DSH_PROFILE ?? 'web'
 const PLUGIN_DIR = process.env.DSH_PREVIEW_PLUGIN ?? `${INSTALL}/docker/plugin-preview`
 const PLUGIN_NAME = 'dsh-preview'
+const WORKSPACE = '/workspace'
 const CODEX_PROVIDER = 'openai-codex'
 const CODEX_RECORD = `llm-pi-ai/${CODEX_PROVIDER}`
 
@@ -137,11 +138,49 @@ function hasCodexGrant() {
   return store?.records?.[CODEX_RECORD] !== undefined
 }
 
+/**
+ * Say who owns a path this container cannot write, and how to hand it over.
+ * A volume from an image that ran as another user is the usual reason: Docker
+ * only adopts the image's ownership onto an empty volume, so an existing one
+ * keeps the uid that created it.
+ * @param path - the directory that refused the write.
+ */
+function refuseOwnership(path) {
+  let owner
+  try {
+    owner = statSync(path).uid
+  } catch {
+    // The stat can only fail if the path went away between the two calls,
+    // which leaves the advice below correct anyway.
+    owner = 'another user'
+  }
+  process.stderr.write(
+    `bootstrap: ${path} belongs to uid ${owner}, and this container runs as uid ${process.getuid()}.\n`
+    + `  Hand it over once, then start again:\n`
+    + `    docker compose run --rm --user root dsh chown -R ${process.getuid()}:${process.getgid()} ${path}\n`
+    + `  (a bind-mounted workspace is chowned on the host instead, or matched with\n`
+    + `   --build-arg UID=$(id -u) --build-arg GID=$(id -g))\n`)
+  process.exit(77)
+}
+
 // The credential store refuses a home whose files any group or other can read.
-mkdirSync(HOME, { recursive: true, mode: 0o700 })
-chmodSync(HOME, 0o700)
+try {
+  mkdirSync(HOME, { recursive: true, mode: 0o700 })
+  chmodSync(HOME, 0o700)
+} catch (error) {
+  if (error.code !== 'EPERM' && error.code !== 'EACCES') throw error
+  refuseOwnership(HOME)
+}
 reconcileProfile()
 seedSettings()
+// A bind-mounted workspace belongs to whoever owns it on the host, and the
+// harness only meets that fact when a session first tries to write there.
+try {
+  accessSync(WORKSPACE, constants.W_OK)
+} catch {
+  log(`WARNING: ${WORKSPACE} is not writable by uid ${process.getuid()};`
+    + ` chown it on the host, or build with --build-arg UID=$(id -u) --build-arg GID=$(id -g)`)
+}
 if (hasCodexGrant()) {
   log('the Codex route is signed in')
 } else {
