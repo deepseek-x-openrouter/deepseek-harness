@@ -1,0 +1,47 @@
+# The Python toolbox the agent gets, installed into /opt/venv.
+#
+# Unpinned on purpose: the image is rebuilt from develop often enough that a
+# frozen set would rot faster than it would help. Pin a line here (`pandas==…`)
+# if a deployment needs the same versions across rebuilds.
+#
+# The venv belongs to the container's user, so the agent can add to it at run
+# time — `pip install <x>` or `uv pip install <x>` — for the life of that
+# container. Anything it must keep, add here.
+
+# ── frames and numerics ───────────────────────────────────────────────────
+numpy
+pandas
+polars
+pyarrow
+duckdb
+scipy
+statsmodels
+scikit-learn
+
+# ── files the data actually arrives in ────────────────────────────────────
+openpyxl
+lxml
+beautifulsoup4
+pyyaml
+tabulate
+python-dateutil
+pytz
+
+# ── fetching it ───────────────────────────────────────────────────────────
+requests
+httpx
+
+# ── at the terminal ───────────────────────────────────────────────────────
+rich
+ipython
+visidata          # the terminal spreadsheet: `vd prices.parquet`
+yq                # jq for YAML/XML/TOML, on top of the jq binary
+
+# ── charts, written to files (no display in a container) ──────────────────
+matplotlib
+plotly
+
+# ── market data and indicators ────────────────────────────────────────────
+yfinance          # equities/ETF/FX history from Yahoo
+ccxt              # ~100 crypto exchanges behind one API
+ta                # pure-Python indicator set over pandas frames

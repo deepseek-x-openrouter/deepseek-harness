@@ -65,6 +65,7 @@ Browser login works too, if you would rather use it: it waits on
 | **The harness** | this checkout, built from source, so the fork's own changes are in it: no first-run testing notice, the aside column, the provider-first model menu, `--trust-remote-config`, and the `llm-pi-ai/provider-response` event |
 | **The preview plugin** | [`plugin-preview/`](plugin-preview/README.md) — the workspace preview panel and the Codex limit readout, composed into the `web` profile as the bundle `dsh-preview` |
 | **The gate** | Caddy, holding a bcrypt hash of `WEB_PASSWORD`, proxying to the harness on the loopback interface it shares with it |
+| **The toolbox** | Ubuntu 26.04 with Node 26, Bun, Python 3.14 and DuckDB — [what the agent can run](#what-the-agent-can-run) |
 
 The harness web server has no authentication of its own and refuses to bind
 anything but loopback — its documented deployment is exactly this: loopback,
@@ -79,6 +80,93 @@ The password is the whole fence. Use a real one, and put TLS in front of the
 container before publishing it beyond `127.0.0.1` (set `BIND_ADDR`, and name
 the public authority in `PUBLIC_HOST` so the harness accepts pages served under
 it).
+
+## What the agent can run
+
+The image is Ubuntu 26.04 LTS, and the runtimes are current rather than
+whatever a distribution froze:
+
+| | |
+|---|---|
+| **Node 26** | `node`, `npm`, `npx`, `pnpm` — taken from nodejs.org, so `NODE_VERSION` in the Dockerfile is the only thing to bump |
+| **Bun 1.4** | `bun`, `bunx` — a second JS runtime, and the fast package manager |
+| **Python 3.14** | a virtualenv at `/opt/venv`, first on `PATH`: `python` and `pip` are that venv's |
+| **DuckDB 1.5** | the `duckdb` CLI, plus `sqlite3` |
+| **uv** | `uv` and `uvx`, for installing Python far faster than pip |
+| **The shell toolbox** | `rg`, `fd`, `jq`, `yq`, `git`, `curl`, `wget`, `tmux`, `htop`, `tree`, `rsync`, `ssh`, `dig`, `nc`, `socat`, and a C/C++ toolchain |
+
+The Python environment carries pandas, polars, numpy, pyarrow, duckdb, scipy,
+statsmodels, scikit-learn, matplotlib, plotly, requests, httpx, rich, IPython,
+visidata, and the market packages below. The list is
+[`requirements.txt`](requirements.txt) — edit it and rebuild to change what
+every container starts with.
+
+The agent can install more at run time without root: `pip install`,
+`uv pip install`, `uv tool install`, `npm i -g`, `bun add -g` all work, each
+landing on `PATH`. Those installs live as long as the container, not the
+volumes — anything permanent belongs in `requirements.txt` or the Dockerfile.
+
+All of this costs about 1.7 GB of image over the harness alone, most of it the
+Python scientific stack and the C toolchain. Trim `requirements.txt` and drop
+`build-essential` from the Dockerfile if the deployment does not need them.
+
+### Analyzing trading data
+
+**DuckDB is the tool to reach for**, and it is why it is installed rather than
+a dedicated trading package. It is open source (MIT), a single binary with no
+server, and it queries CSV, Parquet, JSON and SQLite files in place — so a
+directory of bars is a table without an import step, and a dataset larger than
+memory is still one query:
+
+```sh
+duckdb -c "
+  with r as (
+    select ts, close, ln(close / lag(close) over (order by ts)) ret
+    from read_parquet('bars/*.parquet')
+  )
+  select ts::date d,
+         round(stddev_samp(ret) over (order by ts rows between 19 preceding and current row)
+               * sqrt(365) * 100, 1) vol_ann_pct
+  from r order by ts desc limit 5"
+```
+
+Returns, rolling volatility, drawdown, resampling to another bar size and
+joins across symbols are all window functions; `COPY (…) TO 'out.parquet'`
+writes the answer back out. Around it:
+
+- **polars / pandas** when the next step is Python — indicators, models, plots.
+- **`ta`** for the standard indicator set over a pandas frame, pure Python and
+  no TA-Lib C library to install.
+- **`yfinance`** for equity, ETF and FX history; **`ccxt`** for ~100 crypto
+  exchanges behind one API.
+- **VisiData** (`vd prices.parquet`) to eyeball a file as a terminal
+  spreadsheet when a query is not the point.
+
+A full backtesting framework is deliberately not baked in: they pin their own
+dependency trees and would fight this shared environment. Install one into its
+own environment when a session actually needs it —
+`uv tool install freqtrade` (crypto, MIT) is the usual choice, and
+`uv pip install backtrader` or `vectorbt` work the same way.
+
+### What the agent is told about all this
+
+The harness reads `$DSH_HOME/AGENTS.md` into every session, whatever workspace
+it opens — the container's global instructions, above any project's own. Here
+that is `/data/AGENTS.md`, loaded by the `standard`, `code` and `cordis`
+presets (the `minimal` preset mounts no instruction loader at all). The first
+start seeds it from [`agents.seed.md`](agents.seed.md) with the
+inventory above: who it runs as, which paths survive, what is installed, how
+to install more, and how to approach market data.
+
+That file is yours after that. Edit it in place to tell every session
+something — house conventions, where the data lives, what never to touch:
+
+```sh
+docker compose exec dsh vi /data/AGENTS.md
+```
+
+It survives rebuilds (it is on the home volume) and is never overwritten. A
+per-project `AGENTS.md` in the workspace still layers on top of it as usual.
 
 ## Who it runs as
 
@@ -109,7 +197,7 @@ That uid has to be able to write the two volumes:
 
 | Path | Volume | Holds |
 |---|---|---|
-| `/data` | `dsh-home` | sessions, `settings.yaml`, `.credentials.yaml`, the profile |
+| `/data` | `dsh-home` | sessions, `settings.yaml`, `.credentials.yaml`, `AGENTS.md`, the profile |
 | `/workspace` | `dsh-workspace`, or `WORKSPACE_DIR` | what the agent edits |
 
 Point `WORKSPACE_DIR` at a host directory to work on real files:
@@ -120,8 +208,8 @@ WORKSPACE_DIR=/home/you/projects
 
 On every start, `bootstrap.mjs` reconciles the home volume with the image: it
 rewrites the profile's bundle list (adding `dsh-preview`, dropping any bundle
-this image no longer installs), seeds `settings.yaml` if the volume has none,
-and reports whether anyone has signed in yet. It never writes a credential and
+this image no longer installs), seeds `settings.yaml` and `AGENTS.md` if the
+volume has none, and reports whether anyone has signed in yet. It never writes a credential and
 never overwrites settings you have changed.
 
 ## Other settings

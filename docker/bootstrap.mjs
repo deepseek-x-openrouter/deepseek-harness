@@ -10,6 +10,8 @@
  *   itself is reachable through one symlink into the installation.
  * - **Settings.** Seeded once, on a home that has none, so the Codex route is
  *   named before anyone signs in to it.
+ * - **The user-global `AGENTS.md`.** Seeded once, so every session knows which
+ *   tools this image put on the agent's PATH.
  *
  * No credential is ever written here. Signing in happens inside the container,
  * through `dsh-login`, and pi-ai stays the only writer of the record it later
@@ -130,6 +132,21 @@ function seedSettings() {
 }
 
 /**
+ * Seed the user-global instruction file — `$DSH_HOME/AGENTS.md`, which the
+ * harness loads into every session whatever workspace it opens — so the agent
+ * knows what this image gives it. Absent only: once the file exists it is the
+ * user's, and this is the file to edit to tell every session something.
+ */
+function seedAgentInstructions() {
+  const path = join(HOME, 'AGENTS.md')
+  if (existsSync(path)) return
+  const seed = join(INSTALL, 'docker', 'agents.seed.md')
+  if (!existsSync(seed)) return
+  writeFileSync(path, readFileSync(seed, 'utf8'))
+  log('seeded AGENTS.md — what this container holds, read by every session')
+}
+
+/**
  * Whether the credential store already holds a grant for the Codex route.
  * @returns true when someone has signed this container in.
  */
@@ -173,6 +190,7 @@ try {
 }
 reconcileProfile()
 seedSettings()
+seedAgentInstructions()
 // A bind-mounted workspace belongs to whoever owns it on the host, and the
 // harness only meets that fact when a session first tries to write there.
 try {
