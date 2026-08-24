@@ -26,6 +26,8 @@ services:
       CODEX_REFRESH_TOKEN: ${CODEX_REFRESH_TOKEN:-}
       CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID:-}
       CODEX_SEED: ${CODEX_SEED:-}
+      # 0 pins settings and credentials back to loopback.
+      TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
     ports:
       # Drop this whole block when a proxy in the same stack reaches the

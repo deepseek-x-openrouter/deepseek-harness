@@ -35,7 +35,7 @@ trusted=()
 IFS=',' read -ra hosts <<< "${PUBLIC_HOST:-localhost:$WEB_PORT}"
 for host in "${hosts[@]}"; do
   host="$(echo "$host" | xargs)"
-  [[ -n "$host" ]] && trusted+=(--trusted-host "$host")
+  if [[ -n "$host" ]]; then trusted+=(--trusted-host "$host"); fi
 done
 
 # The configuration plane (settings, credentials, model discovery) is loopback
@@ -43,12 +43,18 @@ done
 # talk to a session but cannot change a setting — the proxy above is the gate
 # the flag's contract requires.
 config_flag=()
-[[ "${TRUST_REMOTE_CONFIG:-1}" == "1" ]] && config_flag+=(--trust-remote-config)
+if [[ "${TRUST_REMOTE_CONFIG:-1}" == "1" ]]; then config_flag+=(--trust-remote-config); fi
 
-shutdown() {
-  kill "$CADDY_PID" 2>/dev/null || true
+# `docker stop` must reach the harness itself: it answers SIGTERM with a
+# bounded shutdown that flushes the session log, and an untrapped signal here
+# would kill this shell before it ever forwards one.
+terminate() {
+  trap - TERM INT
+  kill -TERM "${DSH_PID:-}" "$CADDY_PID" 2>/dev/null || true
+  wait "${DSH_PID:-}" 2>/dev/null || true
 }
-trap shutdown EXIT
+trap terminate TERM INT
+trap 'kill "$CADDY_PID" 2>/dev/null || true' EXIT
 
 echo "entrypoint: serving on :$WEB_PORT as user '$WEB_USER' (harness on 127.0.0.1:$HARNESS_PORT)"
 

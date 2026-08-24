@@ -34,6 +34,7 @@ services:
       CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID:-}
       # Set to `force` once, after a fresh login, to replace a stored grant.
       CODEX_SEED: ${CODEX_SEED:-}
+      TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
       # The model the first start writes into settings.yaml.
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
     ports:
