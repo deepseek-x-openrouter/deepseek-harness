@@ -1,0 +1,12 @@
+.git
+**/node_modules
+**/lib
+**/dist
+.dsh-build
+.sessions
+.env
+apps/web/dist
+website/.vitepress/cache
+website/.vitepress/dist
+python/.venv
+**/*.log

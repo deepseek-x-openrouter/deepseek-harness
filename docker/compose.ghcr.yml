@@ -1,0 +1,40 @@
+# The published image, pulled instead of built — the file to copy into another
+# stack. Nothing here needs this repository checked out:
+#
+#   curl -O https://raw.githubusercontent.com/deepseek-x-openrouter/deepseek-harness/develop/docker/compose.ghcr.yml
+#   curl -o .env https://raw.githubusercontent.com/deepseek-x-openrouter/deepseek-harness/develop/docker/.env.example
+#   docker compose -f compose.ghcr.yml up -d
+#
+# See docker/README.md ("Put it in another stack") for wiring it behind an
+# existing reverse proxy.
+name: dsh
+
+services:
+  dsh:
+    image: ${DSH_IMAGE:-ghcr.io/deepseek-x-openrouter/deepseek-harness:latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      WEB_USER: ${WEB_USER:-dsh}
+      WEB_PASSWORD: ${WEB_PASSWORD:?set WEB_PASSWORD in .env}
+      # Every authority a browser may reach this deployment by, comma
+      # separated — the harness API fence refuses pages served under any name
+      # it was not given. Behind a proxy, this is the public hostname.
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost:${WEB_PORT:-8080}}
+      CODEX_ACCESS_TOKEN: ${CODEX_ACCESS_TOKEN:-}
+      CODEX_REFRESH_TOKEN: ${CODEX_REFRESH_TOKEN:-}
+      CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID:-}
+      CODEX_SEED: ${CODEX_SEED:-}
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
+    ports:
+      # Drop this whole block when a proxy in the same stack reaches the
+      # container over the compose network instead (see README).
+      - "${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    volumes:
+      - dsh-home:/data
+      - ${WORKSPACE_DIR:-dsh-workspace}:/workspace
+
+volumes:
+  dsh-home:
+  dsh-workspace:

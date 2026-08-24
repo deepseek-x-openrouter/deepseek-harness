@@ -1,0 +1,20 @@
+# The container's front door: one password-gated proxy in front of the
+# loopback harness. TLS belongs to whatever fronts this container (a reverse
+# proxy, a tunnel, or localhost), so this listener speaks plain HTTP.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$WEB_PORT} {
+	basic_auth {
+		{$WEB_USER} {$WEB_PASSWORD_HASH}
+	}
+
+	# The harness needs the browser's own Host header to answer its API fence,
+	# and its session stream is a long-lived response: no buffering, no timeout.
+	reverse_proxy 127.0.0.1:{$HARNESS_PORT} {
+		flush_interval -1
+	}
+}

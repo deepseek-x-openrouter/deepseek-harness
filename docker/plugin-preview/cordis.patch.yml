@@ -1,0 +1,5 @@
+# The dsh-preview bundle layer: applied when a profile lists dsh-preview.
+# Rows reference the package by name so Node resolution finds the installed code.
+- insert:
+    - id: dsh-preview
+      name: dsh-preview
