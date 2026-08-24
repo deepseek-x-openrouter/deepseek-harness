@@ -39,3 +39,6 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+
+# Database connection settings for the container (see docker/db.env.example).
+db.env

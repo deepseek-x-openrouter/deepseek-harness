@@ -92,7 +92,7 @@ FROM base AS runtime
 # pnpm comes from the base stage: `dsh plugin` shells out to it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       bash git less \
-      ripgrep fd-find jq sqlite3 tree file bc time \
+      ripgrep fd-find jq sqlite3 postgresql-client tree file bc time \
       wget rsync unzip zip bzip2 gzip tar zstd \
       procps psmisc htop tmux vim-tiny nano \
       openssh-client dnsutils iputils-ping netcat-openbsd socat \

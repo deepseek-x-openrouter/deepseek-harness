@@ -27,6 +27,13 @@ services:
       # 0 pins settings and credentials back to loopback.
       TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
+    # A database for the agent to read: put libpq's own variables (PGHOST,
+    # PGUSER, …) in db.env next to this file and `psql`, psycopg and DuckDB's
+    # postgres extension all connect with no arguments. In a stack running its
+    # own Postgres, PGHOST is that service's name on the shared network.
+    env_file:
+      - path: db.env
+        required: false
     ports:
       # Drop this whole block when a proxy in the same stack reaches the
       # container over the compose network instead (see README).

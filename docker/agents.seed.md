@@ -23,7 +23,7 @@ including anything you install.
   and `pip` are that venv's. It holds pandas, polars, numpy, pyarrow, duckdb,
   scipy, statsmodels, scikit-learn, matplotlib, plotly, requests, httpx, rich,
   IPython, visidata, and the market packages below.
-- **DuckDB** (`duckdb`) and `sqlite3`.
+- **DuckDB** (`duckdb`), `sqlite3`, and `psql` with `psycopg` for Postgres.
 - The usual shell tooling: `rg`, `fd`, `jq`, `yq`, `git`, `curl`, `wget`,
   `tmux`, `htop`, `tree`, `rsync`, `ssh`, `dig`, `nc`, `socat`, plus a C/C++
   toolchain (`gcc`, `g++`, `make`, `pkg-config`).
@@ -50,6 +50,26 @@ rolling volatility, drawdown, resampling to another bar size — in one query,
 and `COPY (…) TO 'out.parquet'` writes the result back out. Use pandas or
 polars when the next step is Python (indicators, models, plots), and hand large
 inputs to polars rather than pandas.
+
+### If a Postgres database is configured
+
+`PGHOST` and the other `PG*` variables carry it, so all three routes connect
+with no connection string at all:
+
+```sh
+psql -c '\dt'                                   # the client, interactively
+duckdb -c "ATTACH '' AS pg (TYPE postgres, READ_ONLY); show all tables"
+```
+
+```python
+import psycopg                                   # from Python
+with psycopg.connect() as cx: ...
+```
+
+The DuckDB route is usually the one you want for analysis: attached tables
+join against local Parquet and CSV in the same query, so a pull-then-analyze
+step disappears. `READ_ONLY` on the attachment is the habit to keep — and
+check `echo $PGHOST` before assuming a database exists at all.
 
 For markets specifically: `yfinance` fetches equity, ETF and FX history,
 `ccxt` reaches roughly a hundred crypto exchanges through one API, and `ta`

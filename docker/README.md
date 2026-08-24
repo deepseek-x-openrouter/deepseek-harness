@@ -91,7 +91,7 @@ whatever a distribution froze:
 | **Node 26** | `node`, `npm`, `npx`, `pnpm` — taken from nodejs.org, so `NODE_VERSION` in the Dockerfile is the only thing to bump |
 | **Bun 1.4** | `bun`, `bunx` — a second JS runtime, and the fast package manager |
 | **Python 3.14** | a virtualenv at `/opt/venv`, first on `PATH`: `python` and `pip` are that venv's |
-| **DuckDB 1.5** | the `duckdb` CLI, plus `sqlite3` |
+| **DuckDB 1.5** | the `duckdb` CLI, plus `sqlite3` and `psql` |
 | **uv** | `uv` and `uvx`, for installing Python far faster than pip |
 | **The shell toolbox** | `rg`, `fd`, `jq`, `yq`, `git`, `curl`, `wget`, `tmux`, `htop`, `tree`, `rsync`, `ssh`, `dig`, `nc`, `socat`, and a C/C++ toolchain |
 
@@ -141,6 +141,38 @@ writes the answer back out. Around it:
   exchanges behind one API.
 - **VisiData** (`vd prices.parquet`) to eyeball a file as a terminal
   spreadsheet when a query is not the point.
+
+### Reading a Postgres database
+
+Copy [`db.env.example`](db.env.example) to `db.env` and fill in libpq's own
+variables. All three routes into the database then connect with no connection
+string, because each of them reads that same environment:
+
+```sh
+docker compose exec dsh psql -c '\dt'
+docker compose exec dsh duckdb -c "ATTACH '' AS pg (TYPE postgres, READ_ONLY); show all tables"
+docker compose exec dsh python -c "import psycopg; print(psycopg.connect().info.dsn)"
+```
+
+`psql` and `psycopg[binary]` are in the image. DuckDB's `postgres` extension
+is not — it auto-installs on first `ATTACH` (about a megabyte, once per
+container, so the container needs to reach the internet that first time; a
+`duckdb -c "INSTALL postgres"` in your own start-up step pre-empts it).
+
+The DuckDB route is the one that pays off: an attached table joins against
+local Parquet and CSV in a single query, so extracting to a file before
+analyzing it stops being a step.
+
+Settings live in `db.env` rather than in `.env` for one practical reason:
+`.env` sets every line it holds, and libpq rejects an *empty* value for some
+of its variables — an unset `PGSSLMODE=` makes `psql` fail with
+`invalid sslmode value: ""`. A separate optional file sets only what you
+actually wrote.
+
+In a compose stack running its own Postgres, `PGHOST` is that service's name
+on the shared network. Give the agent a **read-only role**: anything it can
+write, it can drop. `db.env` holds a password — it is git-ignored with the
+rest.
 
 A full backtesting framework is deliberately not baked in: they pin their own
 dependency trees and would fight this shared environment. Install one into its
