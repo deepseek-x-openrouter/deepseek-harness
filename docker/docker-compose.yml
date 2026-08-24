@@ -26,16 +26,9 @@ services:
       # separated (host or host:port) — the harness API fence refuses pages
       # served under any other name.
       PUBLIC_HOST: ${PUBLIC_HOST:-localhost:${WEB_PORT:-8080}}
-      # Codex subscription: either mount an auth.json (see volumes below) or
-      # paste the three token values into .env.
-      CODEX_AUTH_JSON: ${CODEX_AUTH_JSON:-}
-      CODEX_ACCESS_TOKEN: ${CODEX_ACCESS_TOKEN:-}
-      CODEX_REFRESH_TOKEN: ${CODEX_REFRESH_TOKEN:-}
-      CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID:-}
-      # Set to `force` once, after a fresh login, to replace a stored grant.
-      CODEX_SEED: ${CODEX_SEED:-}
       TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
-      # The model the first start writes into settings.yaml.
+      # The model the first start writes into settings.yaml; signing in
+      # happens inside the container (`docker compose exec dsh dsh-login`).
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
     ports:
       # Bound to loopback by default: publish it wider only behind TLS.
@@ -46,9 +39,6 @@ services:
       # What the agent works on. Point WORKSPACE_DIR at a host directory to
       # edit real files; the default keeps everything inside Docker.
       - ${WORKSPACE_DIR:-dsh-workspace}:/workspace
-      # To hand the container a Codex CLI login instead of pasting tokens into
-      # .env, mount it and set CODEX_AUTH_JSON=/run/codex-auth.json:
-      # - ${HOME}/.codex/auth.json:/run/codex-auth.json:ro
 
 volumes:
   dsh-home:

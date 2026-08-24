@@ -8,11 +8,12 @@
  * - **The profile.** Its bundle list must name the preview plugin and must not
  *   name a plugin that is no longer installed in the image, and the plugin
  *   itself is reachable through one symlink into the installation.
- * - **Settings.** Seeded once, on a home that has none, so a first start has a
- *   working Codex route instead of an empty model menu.
- * - **The Codex grant.** Seeded from the environment only when the credential
- *   store has none: pi-ai rotates the refresh token in place, so a stored
- *   grant is always newer than the one this container was handed.
+ * - **Settings.** Seeded once, on a home that has none, so the Codex route is
+ *   named before anyone signs in to it.
+ *
+ * No credential is ever written here. Signing in happens inside the container,
+ * through `dsh-login`, and pi-ai stays the only writer of the record it later
+ * refreshes.
  *
  * @module docker/bootstrap
  */
@@ -127,83 +128,13 @@ function seedSettings() {
   log(`seeded settings.yaml with the ${CODEX_PROVIDER} route (model ${model})`)
 }
 
-/** The `exp` claim of a JWT, in epoch milliseconds, or null. */
-function expiryFromJwt(token) {
-  const parts = token.split('.')
-  if (parts.length !== 3) return null
-  try {
-    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
-    return typeof claims.exp === 'number' ? claims.exp * 1000 : null
-  } catch {
-    // A token this process cannot read is still a token the provider may
-    // accept; the grant just carries no expiry hint.
-    return null
-  }
-}
-
 /**
- * The Codex OAuth grant offered by this container's environment: either a
- * mounted Codex CLI `auth.json` or the three explicit variables.
- * @returns {object | null} the pi-ai credential payload, or null when none is offered.
+ * Whether the credential store already holds a grant for the Codex route.
+ * @returns true when someone has signed this container in.
  */
-function offeredGrant() {
-  const authPath = process.env.CODEX_AUTH_JSON
-  if (authPath !== undefined && authPath.trim().length > 0) {
-    if (!existsSync(authPath)) throw new Error(`CODEX_AUTH_JSON points at ${authPath}, which does not exist`)
-    const tokens = JSON.parse(readFileSync(authPath, 'utf8')).tokens ?? {}
-    if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string') {
-      throw new Error(`${authPath} carries no ChatGPT tokens; sign in with the Codex CLI first`)
-    }
-    return {
-      type: 'oauth',
-      access: tokens.access_token,
-      refresh: tokens.refresh_token,
-      expires: expiryFromJwt(tokens.access_token) ?? Date.now(),
-      ...typeof tokens.account_id === 'string' ? { accountId: tokens.account_id } : {},
-    }
-  }
-  const access = process.env.CODEX_ACCESS_TOKEN
-  const refresh = process.env.CODEX_REFRESH_TOKEN
-  if (access === undefined || refresh === undefined || access.length === 0 || refresh.length === 0) return null
-  const expires = process.env.CODEX_TOKEN_EXPIRES
-  return {
-    type: 'oauth',
-    access,
-    refresh,
-    expires: expires === undefined ? expiryFromJwt(access) ?? Date.now() : Number(expires),
-    ...process.env.CODEX_ACCOUNT_ID === undefined ? {} : { accountId: process.env.CODEX_ACCOUNT_ID },
-  }
-}
-
-/**
- * Write the Codex grant into `.credentials.yaml` when the store has none.
- *
- * A stored grant is never replaced by default: pi-ai refreshes the access
- * token and rotates the refresh token in place, so what the volume holds is
- * newer than what the environment was given at `docker compose up`. Set
- * `CODEX_SEED=force` after a fresh `codex login` to overwrite it deliberately.
- */
-function seedCredentials() {
-  const path = join(HOME, '.credentials.yaml')
-  const store = readYaml(path) ?? { version: 1 }
-  if (store.version !== 1) throw new Error(`${path} is not a version 1 credential store`)
-  const records = store.records ?? {}
-  const force = process.env.CODEX_SEED === 'force'
-  if (records[CODEX_RECORD] !== undefined && !force) {
-    log('kept the stored Codex grant (set CODEX_SEED=force to replace it)')
-    return
-  }
-  const grant = offeredGrant()
-  if (grant === null) {
-    if (records[CODEX_RECORD] === undefined) {
-      log('no Codex credentials offered — mount CODEX_AUTH_JSON or set CODEX_ACCESS_TOKEN/CODEX_REFRESH_TOKEN')
-    }
-    return
-  }
-  store.records = { ...records, [CODEX_RECORD]: { kind: 'grant', payload: grant } }
-  writeYaml(path, store, 0o600)
-  log(`${force && records[CODEX_RECORD] !== undefined ? 'replaced' : 'seeded'} the Codex grant`
-    + ` (expires ${new Date(grant.expires).toISOString()})`)
+function hasCodexGrant() {
+  const store = readYaml(join(HOME, '.credentials.yaml'))
+  return store?.records?.[CODEX_RECORD] !== undefined
 }
 
 // The credential store refuses a home whose files any group or other can read.
@@ -211,4 +142,8 @@ mkdirSync(HOME, { recursive: true, mode: 0o700 })
 chmodSync(HOME, 0o700)
 reconcileProfile()
 seedSettings()
-seedCredentials()
+if (hasCodexGrant()) {
+  log('the Codex route is signed in')
+} else {
+  log('no Codex sign-in yet — run: docker compose exec dsh dsh-login')
+}

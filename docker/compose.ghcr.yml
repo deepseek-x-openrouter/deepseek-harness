@@ -22,10 +22,6 @@ services:
       # separated — the harness API fence refuses pages served under any name
       # it was not given. Behind a proxy, this is the public hostname.
       PUBLIC_HOST: ${PUBLIC_HOST:-localhost:${WEB_PORT:-8080}}
-      CODEX_ACCESS_TOKEN: ${CODEX_ACCESS_TOKEN:-}
-      CODEX_REFRESH_TOKEN: ${CODEX_REFRESH_TOKEN:-}
-      CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID:-}
-      CODEX_SEED: ${CODEX_SEED:-}
       # 0 pins settings and credentials back to loopback.
       TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}

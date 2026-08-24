@@ -12,20 +12,51 @@ already run — skip to [Put it in another stack](#put-it-in-another-stack).
 ```sh
 cd docker
 cp .env.example .env
-./import-codex-auth.sh          # copies this machine's `codex login` into .env
 $EDITOR .env                    # set WEB_PASSWORD
 docker compose up -d --build
+docker compose exec dsh dsh-login   # sign in to the ChatGPT subscription
 ```
 
 Then open <http://localhost:8080> and sign in with `WEB_USER` / `WEB_PASSWORD`.
 
 The first build compiles the whole monorepo and takes a while; later starts are
 immediate. `docker compose logs -f` shows what the container did with the home
-volume on start.
+volume on start, including whether it is signed in yet.
 
-If there is no Codex CLI on this machine, paste `CODEX_ACCESS_TOKEN`,
-`CODEX_REFRESH_TOKEN`, and `CODEX_ACCOUNT_ID` into `.env` yourself — they are
-the `tokens` of a `~/.codex/auth.json` from any machine you have signed in on.
+## Signing in
+
+No token ever passes through `.env`, the compose file, or the image. `dsh-login`
+runs the pi-ai provider's own OAuth flow inside the container and pi-ai writes
+the grant straight into `/data/.credentials.yaml` — the same writer that later
+refreshes the access token and rotates the refresh token in place, so a signed-in
+container stays signed in without anything from outside.
+
+It offers ChatGPT's two methods. **Device code** is the one to pick: it prints a
+URL and a code you type into a browser anywhere, so nothing has to reach a
+callback port inside the container.
+
+```
+$ docker compose exec dsh dsh-login
+Signing in to OpenAI Codex (oauth).
+
+Select OpenAI Codex login method:
+  1) Browser login (default)
+  2) Device code login (headless)
+choice [1]: 2
+
+Enter this code on the verification page to finish signing in.
+  https://auth.openai.com/codex/device
+  code: XXXX-XXXXX
+```
+
+Reload the browser tab afterwards and the model menu offers the Codex models.
+Signing in again later replaces the stored grant; the same command takes any
+other pi-ai provider as an argument (`dsh-login anthropic`), though a provider
+the container did not seed also needs its route added from Settings → Models.
+
+Browser login works too, if you would rather use it: it waits on
+`http://localhost:1455/auth/callback` inside the container, so publish that port
+(`ports: - "127.0.0.1:1455:1455"`) before starting the flow.
 
 ## What is inside
 
@@ -65,21 +96,8 @@ WORKSPACE_DIR=/home/you/projects
 On every start, `bootstrap.mjs` reconciles the home volume with the image: it
 rewrites the profile's bundle list (adding `dsh-preview`, dropping any bundle
 this image no longer installs), seeds `settings.yaml` if the volume has none,
-and seeds the Codex grant if the credential store has none. It never overwrites
-settings you have changed.
-
-## The Codex grant, after the first start
-
-The container refreshes the access token and rotates the refresh token itself,
-storing the result in `/data/.credentials.yaml`. What is in `.env` goes stale
-the moment that happens, so the bootstrap keeps the stored grant and ignores
-the environment. After a fresh `codex login` on the host:
-
-```sh
-./import-codex-auth.sh
-CODEX_SEED=force docker compose up -d
-# then clear CODEX_SEED from .env again
-```
+and reports whether anyone has signed in yet. It never writes a credential and
+never overwrites settings you have changed.
 
 ## Other settings
 
@@ -125,9 +143,6 @@ services:
       WEB_USER: dsh
       WEB_PASSWORD: ${DSH_WEB_PASSWORD:?}
       PUBLIC_HOST: dsh.example.com        # the name browsers use
-      CODEX_ACCESS_TOKEN: ${CODEX_ACCESS_TOKEN}
-      CODEX_REFRESH_TOKEN: ${CODEX_REFRESH_TOKEN}
-      CODEX_ACCOUNT_ID: ${CODEX_ACCOUNT_ID}
     volumes:
       - dsh-home:/data
       - ./workspace:/workspace
@@ -182,6 +197,10 @@ location / {
 }
 ```
 
+Once it is up, sign it in the same way as any other deployment —
+`docker compose exec dsh dsh-login` (or `docker exec -it <container> dsh-login`)
+— and the grant stays in the `dsh-home` volume from then on.
+
 Upgrades are `docker compose pull && docker compose up -d`: the home volume
 survives, and the container reconciles it with the new image on start.
 
@@ -192,6 +211,8 @@ docker build -f docker/Dockerfile \
   --build-arg DSH_CLIENT_COMMIT_HASH=$(git rev-parse HEAD) -t dsh-preview .
 
 docker run -d --name dsh -p 127.0.0.1:8080:8080 \
-  -e WEB_PASSWORD=... -e CODEX_ACCESS_TOKEN=... -e CODEX_REFRESH_TOKEN=... \
+  -e WEB_PASSWORD=... \
   -v dsh-home:/data -v dsh-workspace:/workspace dsh-preview
+
+docker exec -it dsh dsh-login
 ```

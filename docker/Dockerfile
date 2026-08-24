@@ -50,6 +50,15 @@ RUN chmod +x /opt/dsh/docker/entrypoint.sh \
     && mkdir -p /data /workspace \
     && chown -R node:node /data /workspace
 
+# Signing in happens in here, never through the environment: `dsh-login` runs
+# the pi-ai provider's own OAuth flow (ChatGPT's device code needs no callback
+# port) and leaves the grant in the credential store the harness reads.
+# The TypeScript loader resolves from the working directory, which is the
+# workspace the user is standing in, so the command steps into the install.
+RUN printf '#!/bin/sh\ncd /opt/dsh && exec node --import tsx/esm /opt/dsh/docker/login.mjs "$@"\n' \
+      > /usr/local/bin/dsh-login \
+    && chmod +x /usr/local/bin/dsh-login
+
 # The harness home is a volume: credentials, sessions, settings, and the
 # profile all live there and outlive the image.
 ENV DSH_HOME=/data \
