@@ -14,6 +14,8 @@
  *   tools this image put on the agent's PATH.
  * - **`.pgpass`.** Rewritten from the configured `PGPASSWORD` on every start,
  *   because that variable cannot reach a process the agent spawns.
+ * - **The `gh` credential store.** Exchanged for a configured `GH_TOKEN` for
+ *   the same reason, and git is pointed at `gh` as its credential helper.
  *
  * No credential is ever written here. Signing in happens inside the container,
  * through `dsh-login`, and pi-ai stays the only writer of the record it later
@@ -22,6 +24,7 @@
  * @module docker/bootstrap
  */
 
+import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { accessSync, chmodSync, constants, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -185,6 +188,62 @@ function reconcilePasswordFile() {
 }
 
 /**
+ * Sign `gh` in from a token supplied through the environment, for the same
+ * reason `.pgpass` exists: `GH_TOKEN` is credential-shaped, so the harness
+ * strips it from every process the agent spawns and `gh` would report itself
+ * logged out. Its config directory is not credential-shaped and survives, so
+ * the token is exchanged here for the credential store `gh` keeps there.
+ *
+ * `gh` writes that store itself — its format is versioned and it migrates
+ * accounts on read, so a hand-written `hosts.yml` is refused. `setup-git`
+ * then registers `gh` as git's credential helper, which is what makes a push
+ * over HTTPS work without a token in the remote URL.
+ *
+ * A token that the API rejects leaves the container running and unauthenticated:
+ * this is a convenience, not a precondition for serving.
+ */
+function reconcileGitHubAuth() {
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN
+  const configDir = process.env.GH_CONFIG_DIR ?? join(HOME, 'gh')
+  if (token === undefined || token === '') {
+    // Silent about an existing login: `gh auth login` run inside the container
+    // writes the same store, and this is not the place to revoke it.
+    if (!existsSync(join(configDir, 'hosts.yml'))) log('gh: no token configured — the agent can run `gh auth login`')
+    return
+  }
+  mkdirSync(configDir, { recursive: true, mode: 0o700 })
+  const login = spawnSync('gh', ['auth', 'login', '--with-token'], { input: token, encoding: 'utf8' })
+  if (login.status !== 0) {
+    process.stderr.write(`bootstrap: gh: the supplied token was refused — ${(login.stderr || login.stdout || '').trim()}\n`)
+    return
+  }
+  // Writes only a helper line naming `gh`; the token stays in gh's store.
+  const setup = spawnSync('gh', ['auth', 'setup-git'], { encoding: 'utf8' })
+  if (setup.status !== 0) {
+    process.stderr.write(`bootstrap: gh: credential helper not installed — ${(setup.stderr || setup.stdout || '').trim()}\n`)
+  }
+  const who = spawnSync('gh', ['api', 'user', '-q', '.login'], { encoding: 'utf8' })
+  log(`gh: signed in${who.status === 0 ? ` as ${who.stdout.trim()}` : ''} — git pushes over HTTPS use it too`)
+}
+
+/**
+ * Let git work on a bind-mounted repository the host owns. Git refuses a
+ * repository owned by another user, which is every bind mount from a host
+ * account that is not this container's uid. `safe.directory` matches a repository
+ * root exactly and takes no path globs, so covering repositories nested in the
+ * workspace means `*` — sound here, where the container holds one user and
+ * reaches nothing but its own volumes.
+ */
+function trustWorkspaceRepositories() {
+  const config = process.env.GIT_CONFIG_GLOBAL
+  if (config === undefined) return
+  const existing = spawnSync('git', ['config', '--file', config, '--get-all', 'safe.directory'], { encoding: 'utf8' })
+  if (existing.stdout.split('\n').includes('*')) return
+  spawnSync('git', ['config', '--file', config, '--add', 'safe.directory', '*'], { encoding: 'utf8' })
+  log('git: every repository in this container is trusted (safe.directory)')
+}
+
+/**
  * Whether the credential store already holds a grant for the Codex route.
  * @returns true when someone has signed this container in.
  */
@@ -230,6 +289,8 @@ reconcileProfile()
 seedSettings()
 seedAgentInstructions()
 reconcilePasswordFile()
+reconcileGitHubAuth()
+trustWorkspaceRepositories()
 // A bind-mounted workspace belongs to whoever owns it on the host, and the
 // harness only meets that fact when a session first tries to write there.
 try {

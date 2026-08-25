@@ -25,10 +25,10 @@ unset WEB_PASSWORD
 
 node /opt/dsh/docker/bootstrap.mjs
 
-# The bootstrap has turned it into /data/.pgpass, which is what libpq reads
-# from here on. Dropping the variable keeps the password out of the harness
-# process and everything it spawns.
-unset PGPASSWORD
+# Both are now on disk in the form their tools read — /data/.pgpass for libpq,
+# gh's own store for gh and git. Dropping the variables keeps the secrets out
+# of the harness process and everything it spawns.
+unset PGPASSWORD GH_TOKEN GITHUB_TOKEN
 
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 CADDY_PID=$!

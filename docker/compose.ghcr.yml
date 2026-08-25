@@ -27,6 +27,10 @@ services:
       # 0 pins settings and credentials back to loopback.
       TRUST_REMOTE_CONFIG: ${TRUST_REMOTE_CONFIG:-1}
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
+      # A GitHub token for `gh` and for git pushes over HTTPS. Passed in from
+      # the environment (or .env) rather than stored: the container exchanges
+      # it for gh's own credential store on start and then drops the variable.
+      GH_TOKEN: ${GH_TOKEN:-}
     # A database for the agent to read: put libpq's own variables (PGHOST,
     # PGUSER, …) in db.env next to this file and `psql`, psycopg and DuckDB's
     # postgres extension all connect with no arguments. In a stack running its

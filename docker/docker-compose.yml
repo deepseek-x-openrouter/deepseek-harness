@@ -35,6 +35,10 @@ services:
       # The model the first start writes into settings.yaml; signing in
       # happens inside the container (`docker compose exec dsh dsh-login`).
       CODEX_MODEL: ${CODEX_MODEL:-gpt-5.3-codex-spark}
+      # A GitHub token for `gh` and for git pushes over HTTPS. Passed in from
+      # the environment (or .env) rather than stored: the container exchanges
+      # it for gh's own credential store on start and then drops the variable.
+      GH_TOKEN: ${GH_TOKEN:-}
     # A database for the agent to read: put libpq's own variables (PGHOST,
     # PGUSER, …) in docker/db.env and `psql`, psycopg and DuckDB's postgres
     # extension all connect with no arguments. The file is optional, and it is

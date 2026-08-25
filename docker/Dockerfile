@@ -163,6 +163,14 @@ ENV DSH_HOME=/data \
 # ignores the variable when the file is absent.
 ENV PGPASSFILE=/data/.pgpass
 
+# The same detour for GitHub: GH_TOKEN is credential-shaped and dies at that
+# same boundary, so the token arrives in the environment and the bootstrap
+# turns it into gh's own credential store, which these two names point at.
+# Both survive the scrub, and both live on the home volume, so a `gh auth
+# login` run inside the container outlives the container too.
+ENV GH_CONFIG_DIR=/data/gh \
+    GIT_CONFIG_GLOBAL=/data/.gitconfig
+
 # Global installs have to land somewhere this user owns, or `npm i -g`,
 # `bun add -g` and `uv tool install` all fail on a root-owned prefix. Each
 # lands on PATH, so a tool the agent installs is callable in the next command.
