@@ -212,17 +212,23 @@ function reconcileGitHubAuth() {
     return
   }
   mkdirSync(configDir, { recursive: true, mode: 0o700 })
-  const login = spawnSync('gh', ['auth', 'login', '--with-token'], { input: token, encoding: 'utf8' })
+  // gh refuses to write its store while the variable is set — it would rather
+  // keep using the environment, which is exactly what cannot survive here. So
+  // every gh call below runs without it, and reads back what was stored.
+  const env = { ...process.env }
+  delete env.GH_TOKEN
+  delete env.GITHUB_TOKEN
+  const login = spawnSync('gh', ['auth', 'login', '--with-token'], { input: token, encoding: 'utf8', env })
   if (login.status !== 0) {
     process.stderr.write(`bootstrap: gh: the supplied token was refused — ${(login.stderr || login.stdout || '').trim()}\n`)
     return
   }
   // Writes only a helper line naming `gh`; the token stays in gh's store.
-  const setup = spawnSync('gh', ['auth', 'setup-git'], { encoding: 'utf8' })
+  const setup = spawnSync('gh', ['auth', 'setup-git'], { encoding: 'utf8', env })
   if (setup.status !== 0) {
     process.stderr.write(`bootstrap: gh: credential helper not installed — ${(setup.stderr || setup.stdout || '').trim()}\n`)
   }
-  const who = spawnSync('gh', ['api', 'user', '-q', '.login'], { encoding: 'utf8' })
+  const who = spawnSync('gh', ['api', 'user', '-q', '.login'], { encoding: 'utf8', env })
   log(`gh: signed in${who.status === 0 ? ` as ${who.stdout.trim()}` : ''} — git pushes over HTTPS use it too`)
 }
 
