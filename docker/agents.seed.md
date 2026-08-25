@@ -24,6 +24,8 @@ including anything you install.
   scipy, statsmodels, scikit-learn, matplotlib, plotly, requests, httpx, rich,
   IPython, visidata, and the market packages below.
 - **DuckDB** (`duckdb`), `sqlite3`, and `psql` with `psycopg` for Postgres.
+- **`gh`**, the GitHub CLI — issues, pull requests, releases, and `gh api` for
+  anything it does not wrap. It needs `gh auth login` once per container.
 - The usual shell tooling: `rg`, `fd`, `jq`, `yq`, `git`, `curl`, `wget`,
   `tmux`, `htop`, `tree`, `rsync`, `ssh`, `dig`, `nc`, `socat`, plus a C/C++
   toolchain (`gcc`, `g++`, `make`, `pkg-config`).
@@ -53,8 +55,10 @@ inputs to polars rather than pandas.
 
 ### If a Postgres database is configured
 
-`PGHOST` and the other `PG*` variables carry it, so all three routes connect
-with no connection string at all:
+`PGHOST` and the other `PG*` variables carry it, and the password comes from
+the passfile `PGPASSFILE` points at — you will not find it in `PGPASSWORD`,
+which is deliberately not passed to anything you run. All three routes
+therefore connect with no connection string at all:
 
 ```sh
 psql -c '\dt'                                   # the client, interactively

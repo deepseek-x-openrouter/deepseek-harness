@@ -45,6 +45,9 @@ ARG TARGETARCH
 ARG BUN_VERSION=1.4.0
 ARG DUCKDB_VERSION=1.5.5
 ARG UV_VERSION=0.12.5
+# Ubuntu ships 2.46; the release is 2.98, and the gap is API surface the agent
+# would hit as unexplained errors.
+ARG GH_VERSION=2.98.0
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
@@ -54,6 +57,8 @@ RUN set -eux; \
       arm64) bun_arch=aarch64;  duck_arch=arm64; uv_arch=aarch64 ;; \
       *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
+    curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
+      | tar -xz -C /tools --strip-components=2 "gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh"; \
     curl -fsSL -o bun.zip \
       "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${bun_arch}.zip"; \
     unzip -q bun.zip && mv "bun-linux-${bun_arch}/bun" /tools/bun; \
@@ -62,7 +67,7 @@ RUN set -eux; \
     unzip -q duckdb.zip -d /tools; \
     curl -fsSL "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_arch}-unknown-linux-gnu.tar.gz" \
       | tar -xz --strip-components=1 -C /tools; \
-    chmod +x /tools/bun /tools/duckdb /tools/uv /tools/uvx; \
+    chmod +x /tools/bun /tools/duckdb /tools/uv /tools/uvx /tools/gh; \
     rm -f bun.zip duckdb.zip
 
 FROM base AS build
@@ -103,7 +108,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Bun as a second JS runtime (and a fast package manager), DuckDB as the
 # column store the data work runs on, uv as the Python installer.
-COPY --from=tools /tools/bun /tools/duckdb /tools/uv /tools/uvx /usr/local/bin/
+COPY --from=tools /tools/bun /tools/duckdb /tools/uv /tools/uvx /tools/gh /usr/local/bin/
 
 # The container's own account, deliberately not the base image's `node` (uid
 # 1000): on most hosts uid 1000 is a real person, and a bind mount or a socket
@@ -150,6 +155,13 @@ ENV DSH_HOME=/data \
     DSH_TELEMETRY_DISABLED=1 \
     WEB_PORT=8080 \
     HARNESS_PORT=3080
+
+# The database password reaches libpq through a passfile, not PGPASSWORD: the
+# harness strips credential-shaped names from every process the agent spawns,
+# so PGPASSWORD never survives into a command the agent runs, while PGPASSFILE
+# does. The bootstrap writes the file when db.env carries a password; libpq
+# ignores the variable when the file is absent.
+ENV PGPASSFILE=/data/.pgpass
 
 # Global installs have to land somewhere this user owns, or `npm i -g`,
 # `bun add -g` and `uv tool install` all fail on a root-owned prefix. Each

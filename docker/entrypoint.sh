@@ -25,6 +25,11 @@ unset WEB_PASSWORD
 
 node /opt/dsh/docker/bootstrap.mjs
 
+# The bootstrap has turned it into /data/.pgpass, which is what libpq reads
+# from here on. Dropping the variable keeps the password out of the harness
+# process and everything it spawns.
+unset PGPASSWORD
+
 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 CADDY_PID=$!
 

@@ -93,6 +93,7 @@ whatever a distribution froze:
 | **Python 3.14** | a virtualenv at `/opt/venv`, first on `PATH`: `python` and `pip` are that venv's |
 | **DuckDB 1.5** | the `duckdb` CLI, plus `sqlite3` and `psql` |
 | **uv** | `uv` and `uvx`, for installing Python far faster than pip |
+| **gh 2.98** | the GitHub CLI, from the release rather than Ubuntu's 2.46; `gh auth login` once per container |
 | **The shell toolbox** | `rg`, `fd`, `jq`, `yq`, `git`, `curl`, `wget`, `tmux`, `htop`, `tree`, `rsync`, `ssh`, `dig`, `nc`, `socat`, and a C/C++ toolchain |
 
 The Python environment carries pandas, polars, numpy, pyarrow, duckdb, scipy,
@@ -162,6 +163,17 @@ container, so the container needs to reach the internet that first time; a
 The DuckDB route is the one that pays off: an attached table joins against
 local Parquet and CSV in a single query, so extracting to a file before
 analyzing it stops being a step.
+
+**The password takes a detour, and it has to.** The harness scrubs
+credential-shaped variable names — `/KEY|PASSWORD|SECRET|TOKEN/i`, in
+`packages/subprocess/subprocess/src/index.ts` — out of every process the agent
+spawns, so that its own `DEEPSEEK_API_KEY` cannot leak into a command. That
+same rule eats `PGPASSWORD`: a `psql` the *agent* runs would find no password,
+even though `docker compose exec dsh psql` works fine. So the bootstrap turns
+`PGPASSWORD` into `/data/.pgpass` at 0600 and the image points `PGPASSFILE` at
+it, which is the file every libpq client reads and a name the scrub lets
+through. It is rewritten on every start, and removed when you remove the
+password.
 
 Settings live in `db.env` rather than in `.env` for one practical reason:
 `.env` sets every line it holds, and libpq rejects an *empty* value for some
